@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/a-h/generate/test/additionalProperties2_gen"
+	additionalProperties2 "github.com/anpriot/schema-generate/test/additionalProperties2_gen"
 )
 
 func TestMarshalUnmarshal(t *testing.T) {

@@ -8,7 +8,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/a-h/generate"
+	generate "github.com/anpriot/schema-generate"
 )
 
 var (
