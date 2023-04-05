@@ -15,6 +15,7 @@ var (
 	o                     = flag.String("o", "", "The output file for the schema.")
 	p                     = flag.String("p", "main", "The package that the structs are created in.")
 	i                     = flag.String("i", "", "A single file path (used for backwards compatibility).")
+	stripUnknownsFlag     = flag.Bool("stripUnknowns", false, "Keys will be omitted when unmarshalling if not defined in the schema")
 	schemaKeyRequiredFlag = flag.Bool("schemaKeyRequired", false, "Allow input files with no $schema key.")
 )
 
@@ -63,5 +64,5 @@ func main() {
 		}
 	}
 
-	generate.Output(w, g, *p)
+	generate.Output(w, g, *p, *stripUnknownsFlag)
 }

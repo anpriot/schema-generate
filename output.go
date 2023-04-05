@@ -31,7 +31,7 @@ func getOrderedStructNames(m map[string]Struct) []string {
 }
 
 // Output generates code and writes to w.
-func Output(w io.Writer, g *Generator, pkg string) {
+func Output(w io.Writer, g *Generator, pkg string, stripUnknownsFlag bool) {
 	structs := g.Structs
 	aliases := g.Aliases
 
@@ -48,7 +48,7 @@ func Output(w io.Writer, g *Generator, pkg string) {
 		s := structs[k]
 		if s.GenerateCode {
 			emitMarshalCode(codeBuf, s, imports)
-			emitUnmarshalCode(codeBuf, s, imports)
+			emitUnmarshalCode(codeBuf, s, imports, stripUnknownsFlag)
 		}
 	}
 
@@ -112,7 +112,7 @@ func (strct *%s) MarshalJSON() ([]byte, error) {
 		// Marshal all the defined fields
 		for _, fieldKey := range getOrderedFieldNames(s.Fields) {
 			f := s.Fields[fieldKey]
-			if f.JSONName == "-" {
+			if f.OriginalJSONName == "-" {
 				continue
 			}
 			if f.Required {
@@ -123,7 +123,7 @@ func (strct *%s) MarshalJSON() ([]byte, error) {
 					fmt.Fprintf(w, `    if strct.%s == nil {
         return nil, errors.New("%s is a required field")
     }
-`, f.Name, f.JSONName)
+`, f.Name, f.OriginalJSONName)
 				} else {
 					fmt.Fprintf(w, "    // only required object types supported for marshal checking (for now)\n")
 				}
@@ -141,7 +141,7 @@ func (strct *%s) MarshalJSON() ([]byte, error) {
  		buf.Write(tmp)
 	}
 	comma = true
-`, f.JSONName, f.Name)
+`, f.OriginalJSONName, f.Name)
 		}
 	}
 	if s.AdditionalType != "" {
@@ -178,7 +178,56 @@ func (strct *%s) MarshalJSON() ([]byte, error) {
 `)
 }
 
-func emitUnmarshalCode(w io.Writer, s Struct, imports map[string]bool) {
+func emitUnmarshalFieldCode(w io.Writer, f Field, imports map[string]bool) {
+	if f.OriginalType == f.Type {
+		fmt.Fprintf(w, `        case "%s":
+            if err := json.Unmarshal([]byte(v), &strct.%s); err != nil {
+                return err
+             }
+`, f.JSONName, f.Name)
+
+		return
+	}
+
+	switch f.OriginalType {
+	case "string":
+		switch f.Type {
+		case "integer":
+			fmt.Fprintf(w, `        case "%s":
+            if newVal, err := strconv.ParseInt(v, 10, 0); err != nil {
+                return err
+             }
+            if err := json.Unmarshal([]byte(newVal), &strct.%s); err != nil {
+                return err
+             }
+`, f.JSONName, f.Name)
+
+			return
+		default:
+			return
+		}
+	case "integer":
+		switch f.Type {
+		case "string":
+			imports["strconv"] = true
+			fmt.Fprintf(w, `        case "%s":
+			var intVal int
+            if err := json.Unmarshal([]byte(v), &intVal); err != nil {
+                return err
+             }
+            strct.%s = strconv.Itoa(intVal)
+`, f.JSONName, f.Name)
+
+			return
+		default:
+			return
+		}
+	default:
+		return
+	}
+}
+
+func emitUnmarshalCode(w io.Writer, s Struct, imports map[string]bool, stripUnknownsFlag bool) {
 	imports["encoding/json"] = true
 	// unmarshal code
 	fmt.Fprintf(w, `
@@ -214,26 +263,25 @@ func (strct *%s) UnmarshalJSON(b []byte) error {
 		if f.JSONName == "-" {
 			continue
 		}
-		fmt.Fprintf(w, `        case "%s":
-            if err := json.Unmarshal([]byte(v), &strct.%s); err != nil {
-                return err
-             }
-`, f.JSONName, f.Name)
+
+		emitUnmarshalFieldCode(w, f, imports)
+
 		if f.Required {
 			fmt.Fprintf(w, "            %sReceived = true\n", f.JSONName)
 		}
 	}
 
-	// handle additional property
-	if s.AdditionalType != "" {
-		if s.AdditionalType == "false" {
-			// all unknown properties are not allowed
-			imports["fmt"] = true
-			fmt.Fprintf(w, `        default:
+	if !stripUnknownsFlag {
+		// handle additional property
+		if s.AdditionalType != "" {
+			if s.AdditionalType == "false" {
+				// all unknown properties are not allowed
+				imports["fmt"] = true
+				fmt.Fprintf(w, `        default:
             return fmt.Errorf("additional property not allowed: \"" + k + "\"")
 `)
-		} else {
-			fmt.Fprintf(w, `        default:
+			} else {
+				fmt.Fprintf(w, `        default:
             // an additional "%s" value
             var additionalValue %s
             if err := json.Unmarshal([]byte(v), &additionalValue); err != nil {
@@ -244,6 +292,7 @@ func (strct *%s) UnmarshalJSON(b []byte) error {
             }
             strct.AdditionalProperties[k]= additionalValue
 `, s.AdditionalType, s.AdditionalType, s.AdditionalType)
+			}
 		}
 	}
 	fmt.Fprintf(w, "        }\n") // switch

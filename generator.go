@@ -2,6 +2,7 @@ package generate
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -46,11 +47,13 @@ func (g *Generator) CreateTypes() (err error) {
 		// ugh: if it was anything but a struct the type will not be the name...
 		if rootType != "*"+name {
 			a := Field{
-				Name:        name,
-				JSONName:    "",
-				Type:        rootType,
-				Required:    false,
-				Description: schema.Description,
+				Name:             name,
+				JSONName:         "",
+				OriginalJSONName: "",
+				Type:             rootType,
+				OriginalType:     rootType,
+				Required:         false,
+				Description:      schema.Description,
 			}
 			g.Aliases[a.Name] = a
 		}
@@ -157,17 +160,42 @@ func (g *Generator) processArray(name string, schema *Schema) (typeStr string, e
 		// only alias root arrays
 		if schema.Parent == nil {
 			array := Field{
-				Name:        name,
-				JSONName:    "",
-				Type:        finalType,
-				Required:    contains(schema.Required, name),
-				Description: schema.Description,
+				Name:             name,
+				JSONName:         "",
+				OriginalJSONName: "",
+				Type:             finalType,
+				OriginalType:     finalType,
+				Required:         contains(schema.Required, name),
+				Description:      schema.Description,
 			}
 			g.Aliases[array.Name] = array
 		}
 		return finalType, nil
 	}
 	return "[]interface{}", nil
+}
+
+type AnpriotOpts struct {
+	OriginalKey  string `json:"originalKey"`
+	OriginalType string `json:"originalType"`
+}
+
+func getAnpriotOpts(key string, schema *Schema) (*AnpriotOpts, error) {
+	prefix := "ANPRIOT:"
+
+	anpriotOpts := AnpriotOpts{}
+
+	if schema.Format != "" && strings.Contains(schema.Format, prefix) {
+		anpriotOptsStr := schema.Format[len(prefix)+1:]
+
+		err := json.Unmarshal([]byte(anpriotOptsStr), &anpriotOpts)
+		if err != nil {
+			return nil, err
+		}
+
+	}
+
+	return &anpriotOpts, nil
 }
 
 // name: name of the struct (calculated by caller)
@@ -188,15 +216,30 @@ func (g *Generator) processObject(name string, schema *Schema) (typ string, err 
 		// calculate sub-schema name here, may not actually be used depending on type of schema!
 		subSchemaName := g.getSchemaName(fieldName, prop)
 		fieldType, err := g.processSchema(subSchemaName, prop)
+		anpriotOpts, err := getAnpriotOpts(propKey, prop)
+
+		inJsonName := propKey
+		originalType := fieldType
+
+		if anpriotOpts.OriginalKey != "" {
+			inJsonName = anpriotOpts.OriginalKey
+		}
+
+		if anpriotOpts.OriginalType != "" {
+			originalType = anpriotOpts.OriginalType
+		}
+
 		if err != nil {
 			return "", err
 		}
 		f := Field{
-			Name:        fieldName,
-			JSONName:    propKey,
-			Type:        fieldType,
-			Required:    contains(schema.Required, propKey),
-			Description: prop.Description,
+			Name:             fieldName,
+			JSONName:         inJsonName,
+			OriginalJSONName: propKey,
+			Type:             fieldType,
+			OriginalType:     originalType,
+			Required:         contains(schema.Required, propKey),
+			Description:      prop.Description,
 		}
 		if f.Required {
 			strct.GenerateCode = true
@@ -225,11 +268,13 @@ func (g *Generator) processObject(name string, schema *Schema) (typ string, err 
 		}
 		// this struct will have both regular and additional properties
 		f := Field{
-			Name:        "AdditionalProperties",
-			JSONName:    "-",
-			Type:        mapTyp,
-			Required:    false,
-			Description: "",
+			Name:             "AdditionalProperties",
+			JSONName:         "-",
+			OriginalJSONName: "-",
+			Type:             mapTyp,
+			OriginalType:     mapTyp,
+			Required:         false,
+			Description:      "",
 		}
 		strct.Fields[f.Name] = f
 		// setting this will cause marshal code to be emitted in Output()
@@ -242,11 +287,13 @@ func (g *Generator) processObject(name string, schema *Schema) (typ string, err 
 			// everything is valid additional
 			subTyp := "map[string]interface{}"
 			f := Field{
-				Name:        "AdditionalProperties",
-				JSONName:    "-",
-				Type:        subTyp,
-				Required:    false,
-				Description: "",
+				Name:             "AdditionalProperties",
+				JSONName:         "-",
+				OriginalJSONName: "-",
+				Type:             subTyp,
+				OriginalType:     subTyp,
+				Required:         false,
+				Description:      "",
 			}
 			strct.Fields[f.Name] = f
 			// setting this will cause marshal code to be emitted in Output()
@@ -388,11 +435,15 @@ type Struct struct {
 type Field struct {
 	// The golang name, e.g. "Address1"
 	Name string
-	// The JSON name, e.g. "address1"
+	// The JSON name when marshalling as JSON, e.g. "address1"
 	JSONName string
+	// The JSON name when unmarshalling JSON, e.g. "address1"
+	OriginalJSONName string
 	// The golang type of the field, e.g. a built-in type like "string" or the name of a struct generated
 	// from the JSON schema.
 	Type string
+	// The type to cast from
+	OriginalType string
 	// Required is set to true when the field is required.
 	Required    bool
 	Description string
