@@ -46,13 +46,13 @@ func (g *Generator) CreateTypes() (err error) {
 		// ugh: if it was anything but a struct the type will not be the name...
 		if rootType != "*"+name {
 			a := Field{
-				Name:             name,
-				JSONName:         "",
-				OriginalJSONName: "",
-				Type:             rootType,
-				OriginalType:     rootType,
-				Required:         false,
-				Description:      schema.Description,
+				Name:          name,
+				MarshalName:   "",
+				UnmarshalName: "",
+				MarshalType:   rootType,
+				UnmarshalType: rootType,
+				Required:      false,
+				Description:   schema.Description,
 			}
 			g.Aliases[a.Name] = a
 		}
@@ -159,13 +159,13 @@ func (g *Generator) processArray(name string, schema *Schema) (typeStr string, e
 		// only alias root arrays
 		if schema.Parent == nil {
 			array := Field{
-				Name:             name,
-				JSONName:         "",
-				OriginalJSONName: "",
-				Type:             finalType,
-				OriginalType:     finalType,
-				Required:         contains(schema.Required, name),
-				Description:      schema.Description,
+				Name:          name,
+				MarshalName:   "",
+				UnmarshalName: "",
+				MarshalType:   finalType,
+				UnmarshalType: finalType,
+				Required:      contains(schema.Required, name),
+				Description:   schema.Description,
 			}
 			g.Aliases[array.Name] = array
 		}
@@ -196,25 +196,35 @@ func (g *Generator) processObject(name string, schema *Schema) (typ string, err 
 			return "", err
 		}
 
-		inJsonName := propKey
-		originalType := fieldType
+		marshalName := propKey
+		marshalType := fieldType
+		unmarshalName := propKey
+		unmarshalType := fieldType
 
-		if prop.OriginalKey != "" {
-			inJsonName = prop.OriginalKey
+		if prop.MarshalKey != "" {
+			marshalName = prop.MarshalKey
 		}
 
-		if prop.OriginalType != "" {
-			originalType = prop.OriginalType
+		if prop.MarshalType != "" {
+			marshalType = prop.MarshalType
+		}
+
+		if prop.UnmarshalKey != "" {
+			unmarshalName = prop.UnmarshalKey
+		}
+
+		if prop.UnmarshalType != "" {
+			unmarshalType = prop.UnmarshalType
 		}
 
 		f := Field{
-			Name:             fieldName,
-			JSONName:         inJsonName,
-			OriginalJSONName: propKey,
-			Type:             fieldType,
-			OriginalType:     originalType,
-			Required:         contains(schema.Required, propKey),
-			Description:      prop.Description,
+			Name:          fieldName,
+			MarshalName:   marshalName,
+			UnmarshalName: unmarshalName,
+			MarshalType:   marshalType,
+			UnmarshalType: unmarshalType,
+			Required:      contains(schema.Required, propKey),
+			Description:   prop.Description,
 		}
 		if f.Required {
 			strct.GenerateCode = true
@@ -243,13 +253,13 @@ func (g *Generator) processObject(name string, schema *Schema) (typ string, err 
 		}
 		// this struct will have both regular and additional properties
 		f := Field{
-			Name:             "AdditionalProperties",
-			JSONName:         "-",
-			OriginalJSONName: "-",
-			Type:             mapTyp,
-			OriginalType:     mapTyp,
-			Required:         false,
-			Description:      "",
+			Name:          "AdditionalProperties",
+			MarshalName:   "-",
+			UnmarshalName: "-",
+			MarshalType:   mapTyp,
+			UnmarshalType: mapTyp,
+			Required:      false,
+			Description:   "",
 		}
 		strct.Fields[f.Name] = f
 		// setting this will cause marshal code to be emitted in Output()
@@ -262,13 +272,13 @@ func (g *Generator) processObject(name string, schema *Schema) (typ string, err 
 			// everything is valid additional
 			subTyp := "map[string]interface{}"
 			f := Field{
-				Name:             "AdditionalProperties",
-				JSONName:         "-",
-				OriginalJSONName: "-",
-				Type:             subTyp,
-				OriginalType:     subTyp,
-				Required:         false,
-				Description:      "",
+				Name:          "AdditionalProperties",
+				MarshalName:   "-",
+				UnmarshalName: "-",
+				MarshalType:   subTyp,
+				UnmarshalType: subTyp,
+				Required:      false,
+				Description:   "",
 			}
 			strct.Fields[f.Name] = f
 			// setting this will cause marshal code to be emitted in Output()
@@ -411,14 +421,14 @@ type Field struct {
 	// The golang name, e.g. "Address1"
 	Name string
 	// The JSON name when marshalling as JSON, e.g. "address1"
-	JSONName string
+	MarshalName string
 	// The JSON name when unmarshalling JSON, e.g. "address1"
-	OriginalJSONName string
+	UnmarshalName string
 	// The golang type of the field, e.g. a built-in type like "string" or the name of a struct generated
 	// from the JSON schema.
-	Type string
+	MarshalType string
 	// The type to cast from
-	OriginalType string
+	UnmarshalType string
 	// Required is set to true when the field is required.
 	Required    bool
 	Description string

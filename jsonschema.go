@@ -28,8 +28,10 @@ type Schema struct {
 	// http://json-schema.org/draft-07/json-schema-validation.html#rfc.section.6.1.1
 	TypeValue interface{} `json:"type"`
 
-	OriginalKey  string `json:"originalKey"`
-	OriginalType string `json:"originalType"`
+	MarshalKey    string `json:"marshalKey"`
+	MarshalType   string `json:"marshalType"`
+	UnmarshalKey  string `json:"unmarshalKey"`
+	UnmarshalType string `json:"unmarshalType"`
 
 	// Definitions are inline re-usable schemas.
 	// http://json-schema.org/draft-07/json-schema-validation.html#rfc.section.9

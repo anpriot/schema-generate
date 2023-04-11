@@ -65,7 +65,7 @@ func Output(w io.Writer, g *Generator, pkg string, stripUnknownsFlag bool) {
 
 		fmt.Fprintln(w, "")
 		fmt.Fprintf(w, "// %s\n", a.Name)
-		fmt.Fprintf(w, "type %s %s\n", a.Name, a.Type)
+		fmt.Fprintf(w, "type %s %s\n", a.Name, a.UnmarshalType)
 	}
 
 	for _, k := range getOrderedStructNames(structs) {
@@ -79,16 +79,17 @@ func Output(w io.Writer, g *Generator, pkg string, stripUnknownsFlag bool) {
 			f := s.Fields[fieldKey]
 
 			// Only apply omitempty if the field is not required.
-			omitempty := ",omitempty"
-			if f.Required {
-				omitempty = ""
-			}
+			// omitempty := ",omitempty"
+			// if f.Required {
+			// 	omitempty = ""
+			// }
 
 			if f.Description != "" {
 				outputFieldDescriptionComment(f.Description, w)
 			}
 
-			fmt.Fprintf(w, "  %s %s `json:\"%s%s\"`\n", f.Name, f.Type, f.JSONName, omitempty)
+			// fmt.Fprintf(w, "  %s %s `json:\"%s%s\"`\n", f.Name, f.UnmarshalType, f.UnmarshalName, omitempty)
+			fmt.Fprintf(w, "  %s %s\n", f.Name, f.MarshalType)
 		}
 
 		fmt.Fprintln(w, "}")
@@ -112,18 +113,18 @@ func (strct *%s) MarshalJSON() ([]byte, error) {
 		// Marshal all the defined fields
 		for _, fieldKey := range getOrderedFieldNames(s.Fields) {
 			f := s.Fields[fieldKey]
-			if f.OriginalJSONName == "-" {
+			if f.MarshalName == "-" {
 				continue
 			}
 			if f.Required {
 				fmt.Fprintf(w, "    // \"%s\" field is required\n", f.Name)
 				// currently only objects are supported
-				if strings.HasPrefix(f.Type, "*") {
+				if strings.HasPrefix(f.MarshalType, "*") {
 					imports["errors"] = true
 					fmt.Fprintf(w, `    if strct.%s == nil {
         return nil, errors.New("%s is a required field")
     }
-`, f.Name, f.OriginalJSONName)
+`, f.Name, f.MarshalName)
 				} else {
 					fmt.Fprintf(w, "    // only required object types supported for marshal checking (for now)\n")
 				}
@@ -141,7 +142,7 @@ func (strct *%s) MarshalJSON() ([]byte, error) {
  		buf.Write(tmp)
 	}
 	comma = true
-`, f.OriginalJSONName, f.Name)
+`, f.MarshalName, f.Name)
 		}
 	}
 	if s.AdditionalType != "" {
@@ -179,20 +180,20 @@ func (strct *%s) MarshalJSON() ([]byte, error) {
 }
 
 func emitUnmarshalFieldCode(w io.Writer, f Field, imports map[string]bool) {
-	if f.OriginalType == f.Type {
+	if f.MarshalType == f.UnmarshalType {
 		fmt.Fprintf(w, `        case "%s":
             if err := json.Unmarshal([]byte(v), &strct.%s); err != nil {
                 return err
              }
-`, f.JSONName, f.Name)
+`, f.UnmarshalName, f.Name)
 
 		return
 	}
 
-	switch f.OriginalType {
+	switch f.UnmarshalType {
 	case "string":
-		switch f.Type {
-		case "integer":
+		switch f.MarshalType {
+		case "int":
 			fmt.Fprintf(w, `        case "%s":
             if newVal, err := strconv.ParseInt(v, 10, 0); err != nil {
                 return err
@@ -200,14 +201,14 @@ func emitUnmarshalFieldCode(w io.Writer, f Field, imports map[string]bool) {
             if err := json.Unmarshal([]byte(newVal), &strct.%s); err != nil {
                 return err
              }
-`, f.JSONName, f.Name)
+`, f.UnmarshalName, f.Name)
 
 			return
 		default:
 			return
 		}
-	case "integer":
-		switch f.Type {
+	case "int":
+		switch f.MarshalType {
 		case "string":
 			imports["strconv"] = true
 			fmt.Fprintf(w, `        case "%s":
@@ -216,7 +217,7 @@ func emitUnmarshalFieldCode(w io.Writer, f Field, imports map[string]bool) {
                 return err
              }
             strct.%s = strconv.Itoa(intVal)
-`, f.JSONName, f.Name)
+`, f.UnmarshalName, f.Name)
 
 			return
 		default:
@@ -237,7 +238,7 @@ func (strct *%s) UnmarshalJSON(b []byte) error {
 	for _, fieldKey := range getOrderedFieldNames(s.Fields) {
 		f := s.Fields[fieldKey]
 		if f.Required {
-			fmt.Fprintf(w, "    %sReceived := false\n", f.JSONName)
+			fmt.Fprintf(w, "    %sReceived := false\n", f.UnmarshalName)
 		}
 	}
 	// setup initial unmarshal
@@ -260,14 +261,15 @@ func (strct *%s) UnmarshalJSON(b []byte) error {
 	// handle defined properties
 	for _, fieldKey := range getOrderedFieldNames(s.Fields) {
 		f := s.Fields[fieldKey]
-		if f.JSONName == "-" {
+
+		if f.UnmarshalName == "-" {
 			continue
 		}
 
 		emitUnmarshalFieldCode(w, f, imports)
 
 		if f.Required {
-			fmt.Fprintf(w, "            %sReceived = true\n", f.JSONName)
+			fmt.Fprintf(w, "            %sReceived = true\n", f.UnmarshalName)
 		}
 	}
 
@@ -307,7 +309,7 @@ func (strct *%s) UnmarshalJSON(b []byte) error {
     if !%sReceived {
         return errors.New("\"%s\" is required but was not present")
     }
-`, f.JSONName, f.JSONName, f.JSONName)
+`, f.UnmarshalName, f.UnmarshalName, f.UnmarshalName)
 		}
 	}
 
