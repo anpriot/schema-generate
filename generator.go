@@ -2,7 +2,6 @@ package generate
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -175,29 +174,6 @@ func (g *Generator) processArray(name string, schema *Schema) (typeStr string, e
 	return "[]interface{}", nil
 }
 
-type AnpriotOpts struct {
-	OriginalKey  string `json:"originalKey"`
-	OriginalType string `json:"originalType"`
-}
-
-func getAnpriotOpts(key string, schema *Schema) (*AnpriotOpts, error) {
-	prefix := "ANPRIOT:"
-
-	anpriotOpts := AnpriotOpts{}
-
-	if schema.Format != "" && strings.Contains(schema.Format, prefix) {
-		anpriotOptsStr := schema.Format[len(prefix)+1:]
-
-		err := json.Unmarshal([]byte(anpriotOptsStr), &anpriotOpts)
-		if err != nil {
-			return nil, err
-		}
-
-	}
-
-	return &anpriotOpts, nil
-}
-
 // name: name of the struct (calculated by caller)
 // schema: detail incl properties & child objects
 // returns: generated type
@@ -216,22 +192,21 @@ func (g *Generator) processObject(name string, schema *Schema) (typ string, err 
 		// calculate sub-schema name here, may not actually be used depending on type of schema!
 		subSchemaName := g.getSchemaName(fieldName, prop)
 		fieldType, err := g.processSchema(subSchemaName, prop)
-		anpriotOpts, err := getAnpriotOpts(propKey, prop)
+		if err != nil {
+			return "", err
+		}
 
 		inJsonName := propKey
 		originalType := fieldType
 
-		if anpriotOpts.OriginalKey != "" {
-			inJsonName = anpriotOpts.OriginalKey
+		if prop.OriginalKey != "" {
+			inJsonName = prop.OriginalKey
 		}
 
-		if anpriotOpts.OriginalType != "" {
-			originalType = anpriotOpts.OriginalType
+		if prop.OriginalType != "" {
+			originalType = prop.OriginalType
 		}
 
-		if err != nil {
-			return "", err
-		}
 		f := Field{
 			Name:             fieldName,
 			JSONName:         inJsonName,

@@ -28,7 +28,8 @@ type Schema struct {
 	// http://json-schema.org/draft-07/json-schema-validation.html#rfc.section.6.1.1
 	TypeValue interface{} `json:"type"`
 
-	Format string `json:"format"`
+	OriginalKey  string `json:"originalKey"`
+	OriginalType string `json:"originalType"`
 
 	// Definitions are inline re-usable schemas.
 	// http://json-schema.org/draft-07/json-schema-validation.html#rfc.section.9
