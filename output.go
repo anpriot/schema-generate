@@ -49,6 +49,7 @@ func Output(w io.Writer, g *Generator, pkg string, stripUnknownsFlag bool) {
 		if s.GenerateCode {
 			emitMarshalCode(codeBuf, s, imports)
 			emitUnmarshalCode(codeBuf, s, imports, stripUnknownsFlag)
+			emitToMapCode(codeBuf, s)
 		}
 	}
 
@@ -315,6 +316,23 @@ func (strct *%s) UnmarshalJSON(b []byte) error {
 
 	fmt.Fprintf(w, "    return nil\n")
 	fmt.Fprintf(w, "}\n") // UnmarshalJSON
+}
+
+func emitToMapCode(w io.Writer, s Struct) {
+	// ToMap code
+	fmt.Fprintf(w, `
+func (strct *%s) ToMap() map[string]any {
+`, s.Name)
+
+	fmt.Fprintf(w, "    m := make(map[string]any)\n")
+
+	for _, fieldKey := range getOrderedFieldNames(s.Fields) {
+		f := s.Fields[fieldKey]
+		fmt.Fprintf(w, "    m[\"%s\"] = strct.%s\n", f.MarshalName, f.Name)
+	}
+
+	fmt.Fprintf(w, "    return m\n")
+	fmt.Fprintf(w, "}\n") // ToMap
 }
 
 func outputNameAndDescriptionComment(name, description string, w io.Writer) {
