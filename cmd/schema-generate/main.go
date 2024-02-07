@@ -3,8 +3,10 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
+	"go/format"
 	"io"
 	"os"
 
@@ -64,5 +66,16 @@ func main() {
 		}
 	}
 
-	generate.Output(w, g, *p, *stripUnknownsFlag)
+	var buf bytes.Buffer
+
+	generate.Output(&buf, g, *p, *stripUnknownsFlag)
+
+	formattedCode, err := format.Source(buf.Bytes())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Failed to format code: ", err)
+		w.Write(buf.Bytes())
+		return
+	}
+
+	w.Write(formattedCode)
 }
