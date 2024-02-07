@@ -30,6 +30,32 @@ func getOrderedStructNames(m map[string]Struct) []string {
 	return keys
 }
 
+// returns the stringified value to check against if possible. For structs (without pointers)
+// you can't check the zero value without using the reflect package
+func getZeroValueCheck(schemaType string) (string, bool) {
+	if strings.HasPrefix(schemaType, "*") {
+		return "nil", true
+	}
+	if strings.HasPrefix(schemaType, "[]") {
+		return "nil", true
+	}
+	switch schemaType {
+	case "array":
+		return "nil", true
+	case "bool":
+		return "false", true
+	case "int":
+		return "0", true
+	case "float64":
+		return "0", true
+	case "nil":
+		return "nil", true
+	case "string":
+		return `""`, true
+	}
+	return "", false
+}
+
 // Output generates code and writes to w.
 func Output(w io.Writer, g *Generator, pkg string, stripUnknownsFlag bool) {
 	structs := g.Structs
@@ -110,7 +136,7 @@ func (strct *%s) MarshalJSON() ([]byte, error) {
 `, s.Name)
 
 	if len(s.Fields) > 0 {
-		fmt.Fprintf(w, "    comma := false\n")
+		fmt.Fprintf(w, "  comma := false\n")
 		// Marshal all the defined fields
 		for _, fieldKey := range getOrderedFieldNames(s.Fields) {
 			f := s.Fields[fieldKey]
@@ -131,19 +157,44 @@ func (strct *%s) MarshalJSON() ([]byte, error) {
 				}
 			}
 
+			if f.OmitEmpty {
+				zeroVal, haveZeroVal := getZeroValueCheck(f.MarshalType)
+				if haveZeroVal {
+					fmt.Fprintf(w,
+						`	// omit empty
+	if strct.%s != %s {
+	
+`, f.Name, zeroVal)
+				} else {
+					fmt.Fprintf(w,
+						`	// Check using reflect.Value
+	if reflect.ValueOf(strct.%s).IsZero() {
+			
+`, f.Name)
+				}
+			}
+
 			fmt.Fprintf(w,
-				`    // Marshal the "%[1]s" field
-    if comma { 
-        buf.WriteString(",") 
-    }
-    buf.WriteString("\"%[1]s\": ")
+				`  // Marshal the "%[1]s" field
 	if tmp, err := json.Marshal(strct.%[2]s); err != nil {
 		return nil, err
- 	} else {
- 		buf.Write(tmp)
+	} else {
+`, f.MarshalName, f.Name)
+
+			fmt.Fprintf(w, `		if comma { 
+			buf.WriteString(",") 
+		}
+		buf.WriteString("\"%[1]s\": ")
+		buf.Write(tmp)`, f.MarshalName)
+
+			fmt.Fprintf(w, `
 	}
 	comma = true
-`, f.MarshalName, f.Name)
+`)
+			if f.OmitEmpty {
+				fmt.Fprintf(w, `
+	}`)
+			}
 		}
 	}
 	if s.AdditionalType != "" {

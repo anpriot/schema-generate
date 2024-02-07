@@ -51,6 +51,7 @@ func (g *Generator) CreateTypes() (err error) {
 				UnmarshalName: "",
 				MarshalType:   rootType,
 				UnmarshalType: rootType,
+				OmitEmpty:     false,
 				Required:      false,
 				Description:   schema.Description,
 			}
@@ -164,6 +165,7 @@ func (g *Generator) processArray(name string, schema *Schema) (typeStr string, e
 				UnmarshalName: "",
 				MarshalType:   finalType,
 				UnmarshalType: finalType,
+				OmitEmpty:     false,
 				Required:      contains(schema.Required, name),
 				Description:   schema.Description,
 			}
@@ -223,6 +225,7 @@ func (g *Generator) processObject(name string, schema *Schema) (typ string, err 
 			UnmarshalName: unmarshalName,
 			MarshalType:   marshalType,
 			UnmarshalType: unmarshalType,
+			OmitEmpty:     prop.OmitEmpty,
 			Required:      contains(schema.Required, propKey),
 			Description:   prop.Description,
 		}
@@ -251,6 +254,7 @@ func (g *Generator) processObject(name string, schema *Schema) (typ string, err 
 			// additionalProperties map type.
 			return mapTyp, nil
 		}
+
 		// this struct will have both regular and additional properties
 		f := Field{
 			Name:          "AdditionalProperties",
@@ -258,6 +262,7 @@ func (g *Generator) processObject(name string, schema *Schema) (typ string, err 
 			UnmarshalName: "-",
 			MarshalType:   mapTyp,
 			UnmarshalType: mapTyp,
+			OmitEmpty:     false,
 			Required:      false,
 			Description:   "",
 		}
@@ -277,6 +282,7 @@ func (g *Generator) processObject(name string, schema *Schema) (typ string, err 
 				UnmarshalName: "-",
 				MarshalType:   subTyp,
 				UnmarshalType: subTyp,
+				OmitEmpty:     false,
 				Required:      false,
 				Description:   "",
 			}
@@ -429,6 +435,8 @@ type Field struct {
 	MarshalType string
 	// The type to cast from
 	UnmarshalType string
+	// The type to cast from
+	OmitEmpty bool
 	// Required is set to true when the field is required.
 	Required    bool
 	Description string
