@@ -136,8 +136,9 @@ func (strct %s) MarshalJSON() ([]byte, error) {
 `, s.Name)
 
 	if len(s.Fields) > 0 {
+		fmt.Fprintf(w, "  comma := false\n")
 		// Marshal all the defined fields
-		for i, fieldKey := range getOrderedFieldNames(s.Fields) {
+		for _, fieldKey := range getOrderedFieldNames(s.Fields) {
 			f := s.Fields[fieldKey]
 			if f.MarshalName == "-" {
 				continue
@@ -179,15 +180,16 @@ func (strct %s) MarshalJSON() ([]byte, error) {
 		return nil, err
 	} else {
 `, f.MarshalName, f.Name)
-			if i > 0 {
-				fmt.Fprintf(w, `		buf.WriteString(",")`)
-			}
-			fmt.Fprintf(w, `
+
+			fmt.Fprintf(w, `		if comma { 
+			buf.WriteString(",") 
+		}
 		buf.WriteString("\"%[1]s\": ")
 		buf.Write(tmp)`, f.MarshalName)
 
 			fmt.Fprintf(w, `
 	}
+	comma = true
 `)
 			if f.OmitEmpty {
 				fmt.Fprintf(w, `
@@ -199,19 +201,23 @@ func (strct %s) MarshalJSON() ([]byte, error) {
 		if s.AdditionalType != "false" {
 			imports["fmt"] = true
 
+			if len(s.Fields) == 0 {
+				fmt.Fprintf(w, "    comma := false\n")
+			}
+
 			fmt.Fprintf(w, "    // Marshal any additional Properties\n")
 			// Marshal any additional Properties
-			fmt.Fprintf(w, `    for k, v := range strct.AdditionalProperties {`)
-			if len(s.Fields) == 0 {
-				fmt.Fprintf(w, `    buf.WriteString(",")`)
-			}
-			fmt.Fprintf(w, `
+			fmt.Fprintf(w, `    for k, v := range strct.AdditionalProperties {
+		if comma {
+			buf.WriteString(",")
+		}
         buf.WriteString(fmt.Sprintf("\"%%s\":", k))
 		if tmp, err := json.Marshal(v); err != nil {
 			return nil, err
 		} else {
 			buf.Write(tmp)
 		}
+        comma = true
 	}
 `)
 		}
