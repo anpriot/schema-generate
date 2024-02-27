@@ -127,16 +127,14 @@ func Output(w io.Writer, g *Generator, pkg string, stripUnknownsFlag bool) {
 }
 
 func emitMarshalCode(w io.Writer, s Struct, imports map[string]bool) {
-	imports["bytes"] = true
 	fmt.Fprintf(w,
 		`
 func (strct %s) MarshalJSON() ([]byte, error) {
-	buf := bytes.NewBuffer(make([]byte, 0))
-	buf.WriteString("{")
+	lines := []string{}
+	
 `, s.Name)
 
 	if len(s.Fields) > 0 {
-		fmt.Fprintf(w, "  comma := false\n")
 		// Marshal all the defined fields
 		for _, fieldKey := range getOrderedFieldNames(s.Fields) {
 			f := s.Fields[fieldKey]
@@ -163,13 +161,11 @@ func (strct %s) MarshalJSON() ([]byte, error) {
 					fmt.Fprintf(w,
 						`	// omit empty
 	if strct.%s != %s {
-	
 `, f.Name, zeroVal)
 				} else {
 					fmt.Fprintf(w,
 						`	// Check using reflect.Value
 	if reflect.ValueOf(strct.%s).IsZero() {
-			
 `, f.Name)
 				}
 			}
@@ -180,20 +176,20 @@ func (strct %s) MarshalJSON() ([]byte, error) {
 		return nil, err
 	} else {
 `, f.MarshalName, f.Name)
+			imports["fmt"] = true
+			fmt.Fprintf(w, `lines = append(lines, fmt.Sprintf("\"%[1]s\": %%s", tmp))`, f.MarshalName)
 
-			fmt.Fprintf(w, `		if comma { 
-			buf.WriteString(",") 
-		}
-		buf.WriteString("\"%[1]s\": ")
-		buf.Write(tmp)`, f.MarshalName)
-
-			fmt.Fprintf(w, `
-	}
-	comma = true
-`)
 			if f.OmitEmpty {
 				fmt.Fprintf(w, `
-	}`)
+	}
+}
+
+`)
+			} else {
+				fmt.Fprintf(w, `
+				}
+
+`)
 			}
 		}
 	}
@@ -201,32 +197,22 @@ func (strct %s) MarshalJSON() ([]byte, error) {
 		if s.AdditionalType != "false" {
 			imports["fmt"] = true
 
-			if len(s.Fields) == 0 {
-				fmt.Fprintf(w, "    comma := false\n")
-			}
-
 			fmt.Fprintf(w, "    // Marshal any additional Properties\n")
 			// Marshal any additional Properties
-			fmt.Fprintf(w, `    for k, v := range strct.AdditionalProperties {
-		if comma {
-			buf.WriteString(",")
-		}
-        buf.WriteString(fmt.Sprintf("\"%%s\":", k))
+			fmt.Fprintf(w, `    for k, v := range strct.AdditionalProperties {`)
+			fmt.Fprintf(w, `
+        lines = append(lines, fmt.Sprintf("\"%%s\":", tmp))
 		if tmp, err := json.Marshal(v); err != nil {
 			return nil, err
-		} else {
-			buf.Write(tmp)
 		}
-        comma = true
 	}
 `)
 		}
 	}
 
+	imports["strings"] = true
 	fmt.Fprintf(w, `
-	buf.WriteString("}")
-	rv := buf.Bytes()
-	return rv, nil
+	return []byte("{" + strings.Join(lines, ", ") + "}"), nil
 }
 `)
 }
