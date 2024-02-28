@@ -286,18 +286,13 @@ func (strct *%s) UnmarshalJSON(b []byte) error {
         return err
     }`)
 
-	// figure out if we need the "v" output of the range keyword
-	needVal := "_"
-	if len(s.Fields) > 0 || (s.AdditionalType != "false" && !stripUnknownsFlag) {
-		needVal = "v"
-	}
-
 	// start the loop
 	fmt.Fprintf(w, `
     // parse all the defined properties
-    for k, %s := range jsonMap {
-        switch k {
-`, needVal)
+    for k, v := range jsonMap {
+        if v != nil {
+			switch k {
+`)
 	// handle defined properties
 	for _, fieldKey := range getOrderedFieldNames(s.Fields) {
 		f := s.Fields[fieldKey]
@@ -337,8 +332,8 @@ func (strct *%s) UnmarshalJSON(b []byte) error {
 			}
 		}
 	}
-	fmt.Fprintf(w, "        }\n") // switch
-	fmt.Fprintf(w, "    }\n")     // for
+	fmt.Fprintf(w, "        }}\n") // switch
+	fmt.Fprintf(w, "    }\n")      // for
 
 	// check all Required fields were received
 	for _, fieldKey := range getOrderedFieldNames(s.Fields) {
