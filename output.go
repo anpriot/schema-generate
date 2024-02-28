@@ -201,10 +201,11 @@ func (strct %s) MarshalJSON() ([]byte, error) {
 			// Marshal any additional Properties
 			fmt.Fprintf(w, `    for k, v := range strct.AdditionalProperties {`)
 			fmt.Fprintf(w, `
-        lines = append(lines, fmt.Sprintf("\"%%s\":", tmp))
-		if tmp, err := json.Marshal(v); err != nil {
-			return nil, err
-		}
+			if tmp, err := json.Marshal(v); err != nil {
+				return nil, err
+			} else {
+				lines = append(lines, fmt.Sprintf("\"%%s\": %%s", k, tmp))
+			}
 	}
 `)
 		}
@@ -287,9 +288,10 @@ func (strct *%s) UnmarshalJSON(b []byte) error {
 
 	// figure out if we need the "v" output of the range keyword
 	needVal := "_"
-	if len(s.Fields) > 0 || s.AdditionalType != "false" {
+	if len(s.Fields) > 0 || (s.AdditionalType != "false" && !stripUnknownsFlag) {
 		needVal = "v"
 	}
+
 	// start the loop
 	fmt.Fprintf(w, `
     // parse all the defined properties
