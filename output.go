@@ -57,7 +57,7 @@ func getZeroValueCheck(schemaType string) (string, bool) {
 }
 
 // Output generates code and writes to w.
-func Output(w io.Writer, g *Generator, pkg string, stripUnknownsFlag bool) {
+func Output(w io.Writer, g *Generator, pkg string) {
 	structs := g.Structs
 	aliases := g.Aliases
 
@@ -74,7 +74,7 @@ func Output(w io.Writer, g *Generator, pkg string, stripUnknownsFlag bool) {
 		s := structs[k]
 		if s.GenerateCode {
 			emitMarshalCode(codeBuf, s, imports)
-			emitUnmarshalCode(codeBuf, s, imports, stripUnknownsFlag)
+			emitUnmarshalCode(codeBuf, s, imports)
 			emitToMapCode(codeBuf, s)
 		}
 	}
@@ -267,7 +267,7 @@ func emitUnmarshalFieldCode(w io.Writer, f Field, imports map[string]bool) {
 	}
 }
 
-func emitUnmarshalCode(w io.Writer, s Struct, imports map[string]bool, stripUnknownsFlag bool) {
+func emitUnmarshalCode(w io.Writer, s Struct, imports map[string]bool) {
 	imports["encoding/json"] = true
 	// unmarshal code
 	fmt.Fprintf(w, `
@@ -308,17 +308,16 @@ func (strct *%s) UnmarshalJSON(b []byte) error {
 		}
 	}
 
-	if !stripUnknownsFlag {
-		// handle additional property
-		if s.AdditionalType != "" {
-			if s.AdditionalType == "false" {
-				// all unknown properties are not allowed
-				imports["fmt"] = true
-				fmt.Fprintf(w, `        default:
-            return fmt.Errorf("additional property not allowed: \"" + k + "\"")
+	// handle additional property
+	if s.AdditionalType != "" {
+		if s.AdditionalType == "false" {
+			// all unknown properties are not allowed
+			imports["fmt"] = true
+			fmt.Fprintf(w, `        default:
+            continue
 `)
-			} else {
-				fmt.Fprintf(w, `        default:
+		} else {
+			fmt.Fprintf(w, `        default:
             // an additional "%s" value
             var additionalValue %s
             if err := json.Unmarshal([]byte(v), &additionalValue); err != nil {
@@ -329,7 +328,6 @@ func (strct *%s) UnmarshalJSON(b []byte) error {
             }
             strct.AdditionalProperties[k]= additionalValue
 `, s.AdditionalType, s.AdditionalType, s.AdditionalType)
-			}
 		}
 	}
 	fmt.Fprintf(w, "        }}\n") // switch
